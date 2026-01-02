@@ -224,7 +224,7 @@ async function getActivePorts(): Promise<PortInfo[]> {
 
         try {
           cwd = execSync(
-            `/usr/sbin/lsof -p ${currentPid} -Fn 2>/dev/null | grep "^ncwd" | cut -c5-`,
+            `/usr/sbin/lsof -p ${currentPid} -Fn 2>/dev/null | awk '/^fcwd/{getline; print substr($0,2)}'`,
             { encoding: "utf-8" },
           ).trim() || undefined;
 
