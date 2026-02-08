@@ -17,3 +17,8 @@ raycast-env.d.ts
 
 # Logs
 *.log
+
+# Claude
+.claude/
+CLAUDE.md
+.repomap.tags.cache.v1/
