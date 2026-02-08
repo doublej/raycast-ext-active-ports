@@ -18,8 +18,12 @@ interface PortInfo {
 function getActivePorts(): PortInfo[] {
   try {
     const output = execSync(
-      "lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null | tail -n +2",
-      { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 },
+      "/usr/sbin/lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null | tail -n +2",
+      {
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, PATH: "/usr/sbin:/usr/bin:/bin:/sbin" },
+      },
     );
 
     const lines = output.trim().split("\n").filter(Boolean);
@@ -44,7 +48,7 @@ function getActivePorts(): PortInfo[] {
       let fullCommand = command;
       try {
         fullCommand =
-          execSync(`ps -p ${pid} -o args= 2>/dev/null`, {
+          execSync(`/bin/ps -p ${pid} -o args= 2>/dev/null`, {
             encoding: "utf-8",
           }).trim() || command;
       } catch {

@@ -2,9 +2,9 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "active-ports",
   "title": "Active Ports",
-  "description": "View and manage active ports on your system. Kill processes, visit URLs, or restart Vite servers on different ports.",
+  "description": "View and manage active TCP ports, kill processes, and restart dev servers.",
   "icon": "extension-icon.png",
-  "author": "jurrejan",
+  "author": "jurre_jan",
   "categories": ["Developer Tools", "System"],
   "license": "MIT",
   "commands": [
@@ -37,6 +37,7 @@
     "build": "ray build --skip-types -e dist -o dist",
     "dev": "ray develop",
     "fix-lint": "ray lint --fix",
-    "lint": "ray lint"
+    "lint": "ray lint",
+    "publish": "bunx @raycast/api@latest publish"
   }
 }

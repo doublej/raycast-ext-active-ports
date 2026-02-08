@@ -58,7 +58,7 @@ function detectServiceType(command: string): ServiceFlags {
     isVite ||
     isNextJS ||
     isSvelteKit ||
-    /webpack|nuxt|remix|astro/i.test(command);
+    /webpack|nuxt|nuxi|remix|astro/i.test(command);
 
   return { isVite, isFastAPI, isFlask, isNextJS, isSvelteKit, isDevServer };
 }
