@@ -20,6 +20,22 @@
       "description": "Menu bar showing active port count with quick actions",
       "mode": "menu-bar",
       "interval": "10s"
+    },
+    {
+      "name": "web-dashboard",
+      "title": "Open Web Dashboard",
+      "description": "Open a browser dashboard to batch-kill processes and edit categorization",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "port",
+          "title": "Dashboard Port",
+          "description": "Local port for the web dashboard server",
+          "type": "textfield",
+          "required": false,
+          "default": "47823"
+        }
+      ]
     }
   ],
   "dependencies": {
