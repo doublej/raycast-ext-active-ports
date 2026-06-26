@@ -11,6 +11,8 @@ import {
   Form,
   useNavigation,
   LocalStorage,
+  launchCommand,
+  LaunchType,
 } from "@raycast/api";
 import { useCachedPromise, usePromise } from "@raycast/utils";
 import { execSync, exec } from "child_process";
@@ -615,6 +617,17 @@ function RestartFlaskForm({
   );
 }
 
+async function openWebDashboard(): Promise<void> {
+  try {
+    await launchCommand({ name: "web-dashboard", type: LaunchType.UserInitiated });
+  } catch {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Could not open Web Dashboard",
+    });
+  }
+}
+
 async function getHiddenPorts(): Promise<number[]> {
   const stored = await LocalStorage.getItem<string>(HIDDEN_PORTS_KEY);
   return stored ? JSON.parse(stored) : [];
@@ -922,6 +935,12 @@ function PortListItem({
 
           <ActionPanel.Section>
             <Action
+              title="Open Web Dashboard"
+              icon={Icon.Window}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
+              onAction={openWebDashboard}
+            />
+            <Action
               title="Refresh"
               icon={Icon.ArrowClockwise}
               shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
@@ -1050,6 +1069,16 @@ export default function Command() {
           title="No Active Ports"
           description="No listening ports found"
           icon={Icon.Network}
+          actions={
+            <ActionPanel>
+              <Action
+                title="Open Web Dashboard"
+                icon={Icon.Window}
+                shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
+                onAction={openWebDashboard}
+              />
+            </ActionPanel>
+          }
         />
       )}
       {devPorts.length > 0 && (

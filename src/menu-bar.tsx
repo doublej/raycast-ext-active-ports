@@ -129,6 +129,17 @@ export default function Command() {
             launchCommand({ name: "index", type: LaunchType.UserInitiated })
           }
         />
+        <MenuBarExtra.Item
+          title="Open Web Dashboard"
+          icon={Icon.Window}
+          shortcut={{ modifiers: ["cmd"], key: "d" }}
+          onAction={() =>
+            launchCommand({
+              name: "web-dashboard",
+              type: LaunchType.UserInitiated,
+            })
+          }
+        />
       </MenuBarExtra.Section>
     </MenuBarExtra>
   );
