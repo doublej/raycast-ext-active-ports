@@ -433,7 +433,10 @@ const PAGE = /* html */ `<!doctype html>
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
   th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); font-weight: 600; }
+  tr.row { cursor: pointer; user-select: none; }
   tr.row:hover td { background: var(--panel); }
+  tr.row.selected td { background: rgba(91,157,255,.14); }
+  tr.row.selected:hover td { background: rgba(91,157,255,.22); }
   td.name { font-weight: 500; }
   td.path { color: var(--muted); font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .port { font-variant-numeric: tabular-nums; }
@@ -471,6 +474,8 @@ const PAGE = /* html */ `<!doctype html>
 let state = { ports: [], categories: [] };
 let selected = new Set();      // keyed by pid
 let showHidden = false;
+let orderedPids = [];          // visible pids in render order (for shift-range)
+let anchorPid = null;          // last clicked row (shift-range anchor)
 
 const $ = (id) => document.getElementById(id);
 
@@ -500,14 +505,17 @@ function render() {
     groups.get(p.category).push(p);
   }
 
+  orderedPids = [];
   const main = $("main");
   main.innerHTML = "";
   let any = false;
   for (const [cat, rows] of groups) {
     if (!rows.length) continue;
     any = true;
+    for (const p of rows) orderedPids.push(p.pid);
     main.appendChild(renderCategory(cat, rows));
   }
+  if (anchorPid != null && !orderedPids.includes(anchorPid)) anchorPid = null;
   if (!any) main.innerHTML = '<div class="empty">No listening ports found.</div>';
   updateKillBtn();
 }
@@ -528,12 +536,22 @@ function renderCategory(cat, rows) {
 
   for (const p of rows) {
     const tr = document.createElement("tr");
-    tr.className = "row";
+    tr.className = selected.has(p.pid) ? "row selected" : "row";
+    tr.onclick = (e) => {
+      // Let native controls (checkbox, links, select, buttons) handle their own clicks.
+      if (e.target.closest("input, a, select, button")) return;
+      handleRowClick(p.pid, e);
+    };
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = selected.has(p.pid);
-    cb.onchange = () => { cb.checked ? selected.add(p.pid) : selected.delete(p.pid); updateKillBtn(); };
+    cb.onchange = () => {
+      cb.checked ? selected.add(p.pid) : selected.delete(p.pid);
+      anchorPid = p.pid;
+      tr.classList.toggle("selected", cb.checked);
+      updateKillBtn();
+    };
 
     const tdCb = document.createElement("td"); tdCb.appendChild(cb);
     const tags = p.tags.map((t) => '<span class="tag">' + esc(t) + '</span>').join("");
@@ -601,6 +619,29 @@ async function toggleHidden(p) {
     body: JSON.stringify({ signature: p.signature, hidden: !p.hidden }),
   });
   await load();
+}
+
+function handleRowClick(pid, e) {
+  if (e.shiftKey && anchorPid != null) {
+    // Range select from the anchor to the clicked row (additive).
+    const a = orderedPids.indexOf(anchorPid);
+    const b = orderedPids.indexOf(pid);
+    if (a !== -1 && b !== -1) {
+      const [lo, hi] = a < b ? [a, b] : [b, a];
+      for (let i = lo; i <= hi; i++) selected.add(orderedPids[i]);
+    }
+  } else if (e.metaKey || e.ctrlKey) {
+    // Toggle this row, keep the rest.
+    selected.has(pid) ? selected.delete(pid) : selected.add(pid);
+    anchorPid = pid;
+  } else {
+    // Plain click: select only this row (unless it's already the sole selection).
+    const soleSelection = selected.size === 1 && selected.has(pid);
+    selected.clear();
+    if (!soleSelection) selected.add(pid);
+    anchorPid = pid;
+  }
+  render();
 }
 
 function updateKillBtn() {
