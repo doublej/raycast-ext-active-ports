@@ -323,9 +323,11 @@ function readBody(req) {
   });
 }
 
-// The client polls every 5s; a slow scan must not queue up behind itself.
-// Kills invalidate the cache so the UI still reflects them immediately.
-const SCAN_TTL_MS = 3000;
+// A full scan costs ~3s on a machine with a few hundred listeners (lsof is the
+// floor), so the TTL must exceed the scan itself — otherwise every poll lands
+// mid-scan and the server is never idle. Kills invalidate the cache so the UI
+// still reflects them immediately.
+const SCAN_TTL_MS = 12000;
 let scanCache = null;
 let scanCacheAt = 0;
 
@@ -350,6 +352,7 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === "/api/ports" && req.method === "GET") {
     const config = loadConfig();
+    if (url.searchParams.get("fresh") === "1") invalidateScanCache();
     const ports = getCachedPorts().map((p) => decorate(p, config));
     return json(res, 200, {
       ports,
@@ -546,8 +549,8 @@ async function api(path, opts) {
   return r.json();
 }
 
-async function load() {
-  const data = await api("/api/ports");
+async function load(force) {
+  const data = await api("/api/ports" + (force === true ? "?fresh=1" : ""));
   state = data;
   $("updated").textContent = "updated " + new Date(data.updatedAt).toLocaleTimeString();
   // prune selection for ports that vanished
@@ -803,7 +806,7 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-$("refresh").onclick = load;
+$("refresh").onclick = () => load(true);
 $("killBtn").onclick = killSelected;
 $("showHidden").onchange = (e) => { showHidden = e.target.checked; render(); };
 $("selectAll").onchange = (e) => {
@@ -827,7 +830,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 load();
-setInterval(load, 5000);
+setInterval(load, 15000);
 </script>
 </body>
 </html>`;
