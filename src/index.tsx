@@ -16,6 +16,8 @@ import {
 } from "@raycast/api";
 import { useCachedPromise, usePromise } from "@raycast/utils";
 import { execSync, exec } from "child_process";
+import { existsSync } from "fs";
+import { join } from "path";
 import { useState, useEffect, useCallback } from "react";
 
 const HIDDEN_PORTS_KEY = "hidden-ports";
@@ -50,19 +52,40 @@ interface ServiceFlags {
   isDevServer: boolean;
 }
 
-function detectServiceType(command: string): ServiceFlags {
-  const isVite = /vite|@vitejs/i.test(command);
-  const isFastAPI = /uvicorn|fastapi/i.test(command);
-  const isFlask = /flask/i.test(command);
-  const isNextJS = /next-server|next dev|next start/i.test(command);
-  const isSvelteKit = /svelte/i.test(command);
-  const isDevServer =
-    isVite ||
-    isNextJS ||
-    isSvelteKit ||
+const PROJECT_CONFIGS: { files: string[]; flag: keyof ServiceFlags }[] = [
+  { files: ["svelte.config.js", "svelte.config.ts"], flag: "isSvelteKit" },
+  { files: ["next.config.js", "next.config.mjs", "next.config.ts"], flag: "isNextJS" },
+  { files: ["vite.config.ts", "vite.config.js", "vite.config.mjs"], flag: "isVite" },
+  { files: ["nuxt.config.ts", "nuxt.config.js"], flag: "isDevServer" },
+  { files: ["astro.config.mjs", "astro.config.ts"], flag: "isDevServer" },
+];
+
+function detectServiceType(command: string, cwd?: string): ServiceFlags {
+  const flags: ServiceFlags = {
+    isVite: /vite|@vitejs/i.test(command),
+    isFastAPI: /uvicorn|fastapi/i.test(command),
+    isFlask: /flask/i.test(command),
+    isNextJS: /next-server|next dev|next start/i.test(command),
+    isSvelteKit: /svelte/i.test(command),
+    isDevServer: false,
+  };
+
+  if (cwd) {
+    for (const { files, flag } of PROJECT_CONFIGS) {
+      if (!flags[flag] && files.some((f) => existsSync(join(cwd, f)))) {
+        flags[flag] = true;
+      }
+    }
+  }
+
+  flags.isDevServer =
+    flags.isVite ||
+    flags.isNextJS ||
+    flags.isSvelteKit ||
+    flags.isDevServer ||
     /webpack|nuxt|nuxi|remix|astro/i.test(command);
 
-  return { isVite, isFastAPI, isFlask, isNextJS, isSvelteKit, isDevServer };
+  return flags;
 }
 
 interface DockerInfo {
@@ -255,7 +278,7 @@ async function getActivePorts(): Promise<PortInfo[]> {
           // ignore
         }
 
-        const serviceFlags = detectServiceType(fullCommand);
+        const serviceFlags = detectServiceType(fullCommand, cwd);
         const dockerInfo = dockerPorts.get(port);
         const { name, project } = getDisplayName(fullCommand, cwd);
 
