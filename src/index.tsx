@@ -727,7 +727,7 @@ function PortListItem({
       return { source: Icon.Bolt, tintColor: Color.Purple };
     if (info.isNextJS) return { source: Icon.Code, tintColor: Color.Green };
     if (info.isFastAPI) return { source: Icon.Rocket, tintColor: Color.Orange };
-    if (info.isFlask) return { source: Icon.Beaker, tintColor: Color.Green };
+    if (info.isFlask) return { source: Icon.Mug, tintColor: Color.Green };
     if (info.isDevServer) return { source: Icon.Code, tintColor: Color.Green };
     if (info.command.includes("python"))
       return { source: Icon.Code, tintColor: Color.Yellow };
