@@ -398,45 +398,51 @@ const PAGE = /* html */ `<!doctype html>
 <title>Active Ports</title>
 <style>
   :root {
-    --bg: #14161a; --panel: #1c1f26; --panel2: #232730; --border: #2c313c;
-    --text: #e6e9ef; --muted: #8a91a0; --accent: #5b9dff; --danger: #ff5b6e;
-    --green: #3ddc84; --purple: #b18bff; --orange: #ffa552;
+    --bg: #15171b; --panel: #1a1d23; --panel2: #20232a; --border: #272b33;
+    --text: #dfe3ea; --muted: #838a97; --accent: #6ea8f2; --danger: #e2687a;
+    --green: #3ddc84; --purple: #b18bff; --orange: #d99b5f;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   header {
     position: sticky; top: 0; z-index: 10; background: var(--bg);
-    border-bottom: 1px solid var(--border); padding: 14px 20px;
-    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); padding: 16px 22px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   }
-  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .1px; }
   .spacer { flex: 1; }
   .muted { color: var(--muted); }
   .updated { font-size: 12px; color: var(--muted); }
   button {
     font: inherit; border: 1px solid var(--border); background: var(--panel2);
     color: var(--text); padding: 7px 12px; border-radius: 7px; cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
   }
   button:hover { border-color: var(--accent); }
   button:disabled { opacity: .4; cursor: not-allowed; }
   button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
-  button.danger:disabled { background: var(--panel2); color: var(--muted); }
-  main { padding: 16px 20px 60px; }
-  .cat { margin-bottom: 26px; }
+  button.danger:disabled { background: var(--panel2); color: var(--muted); border-color: var(--border); }
+  button.ghost-danger {
+    background: transparent; border-color: rgba(226,104,122,.35); color: var(--danger);
+  }
+  button.ghost-danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+  main { padding: 18px 22px 64px; }
+  .cat { margin-bottom: 30px; }
   .cat-head {
-    display: flex; align-items: center; gap: 10px; margin: 0 0 8px;
-    font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
+    display: flex; align-items: center; gap: 10px; margin: 0 0 10px;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
   }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
   th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); font-weight: 600; }
   tr.row { cursor: pointer; user-select: none; }
+  tr.row td { transition: background-color .15s ease; }
   tr.row:hover td { background: var(--panel); }
-  tr.row.selected td { background: rgba(91,157,255,.14); }
-  tr.row.selected:hover td { background: rgba(91,157,255,.22); }
+  tr.row.selected td { background: rgba(110,168,242,.12); }
+  tr.row.selected:hover td { background: rgba(110,168,242,.18); }
   td.name { font-weight: 500; }
   td.path { color: var(--muted); font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .port { font-variant-numeric: tabular-nums; }
@@ -449,16 +455,17 @@ const PAGE = /* html */ `<!doctype html>
   select {
     font: inherit; background: var(--panel2); color: var(--text);
     border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px;
+    transition: border-color .15s ease;
   }
-  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
   .empty { color: var(--muted); padding: 40px; text-align: center; }
-  .quick-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+  .quick-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 26px; }
   .quick-action {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    background: var(--panel2); border: 1px solid var(--orange); border-radius: 8px;
-    padding: 9px 14px; font-size: 13px;
+    background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--orange);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--muted);
   }
-  .quick-action strong { color: var(--text); }
+  .quick-action strong { color: var(--text); font-weight: 500; }
   .selcount { font-variant-numeric: tabular-nums; }
   .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); }
 </style>
@@ -555,7 +562,7 @@ function renderQuickActions(groups) {
     bar.innerHTML =
       '<span>' + rows.length + ' processes in <strong>' + esc(path) + '</strong></span>';
     const btn = document.createElement("button");
-    btn.className = "danger";
+    btn.className = "ghost-danger";
     btn.textContent = "Kill all " + rows.length;
     btn.onclick = () => killGroup(rows.map((r) => r.pid), path);
     bar.appendChild(btn);
@@ -573,7 +580,7 @@ function renderCategory(cat, rows) {
   if (rows.length > 1) {
     const killAllBtn = document.createElement("button");
     killAllBtn.textContent = "Kill all " + rows.length;
-    killAllBtn.className = "danger";
+    killAllBtn.className = "ghost-danger";
     killAllBtn.style.cssText = "margin-left:auto;font-size:12px;padding:3px 10px;";
     killAllBtn.onclick = () => killGroup(rows.map((r) => r.pid), cat);
     head.appendChild(killAllBtn);
