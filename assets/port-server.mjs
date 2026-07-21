@@ -452,6 +452,13 @@ const PAGE = /* html */ `<!doctype html>
   }
   input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
   .empty { color: var(--muted); padding: 40px; text-align: center; }
+  .quick-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+  .quick-action {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--panel2); border: 1px solid var(--orange); border-radius: 8px;
+    padding: 9px 14px; font-size: 13px;
+  }
+  .quick-action strong { color: var(--text); }
   .selcount { font-variant-numeric: tabular-nums; }
   .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); }
 </style>
@@ -462,6 +469,9 @@ const PAGE = /* html */ `<!doctype html>
   <span class="pill selcount" id="count">0 ports</span>
   <div class="spacer"></div>
   <span class="updated" id="updated"></span>
+  <label class="muted" style="display:flex;align-items:center;gap:6px;">
+    <input type="checkbox" id="selectAll" /> select all
+  </label>
   <label class="muted" style="display:flex;align-items:center;gap:6px;">
     <input type="checkbox" id="showHidden" /> show hidden
   </label>
@@ -509,6 +519,10 @@ function render() {
   const main = $("main");
   main.innerHTML = "";
   let any = false;
+
+  const folderGroups = findFolderGroups(visible);
+  if (folderGroups.length) main.appendChild(renderQuickActions(folderGroups));
+
   for (const [cat, rows] of groups) {
     if (!rows.length) continue;
     any = true;
@@ -518,6 +532,36 @@ function render() {
   if (anchorPid != null && !orderedPids.includes(anchorPid)) anchorPid = null;
   if (!any) main.innerHTML = '<div class="empty">No listening ports found.</div>';
   updateKillBtn();
+  updateSelectAllToggle();
+}
+
+// Processes sharing a project folder — surfaced as a one-click "kill all" banner.
+function findFolderGroups(visible) {
+  const byFolder = new Map();
+  for (const p of visible) {
+    if (!p.projectPath) continue;
+    if (!byFolder.has(p.projectPath)) byFolder.set(p.projectPath, []);
+    byFolder.get(p.projectPath).push(p);
+  }
+  return [...byFolder.entries()].filter(([, rows]) => rows.length > 2);
+}
+
+function renderQuickActions(groups) {
+  const wrap = document.createElement("div");
+  wrap.className = "quick-actions";
+  for (const [path, rows] of groups) {
+    const bar = document.createElement("div");
+    bar.className = "quick-action";
+    bar.innerHTML =
+      '<span>' + rows.length + ' processes in <strong>' + esc(path) + '</strong></span>';
+    const btn = document.createElement("button");
+    btn.className = "danger";
+    btn.textContent = "Kill all " + rows.length;
+    btn.onclick = () => killGroup(rows.map((r) => r.pid), path);
+    bar.appendChild(btn);
+    wrap.appendChild(bar);
+  }
+  return wrap;
 }
 
 function renderCategory(cat, rows) {
@@ -526,12 +570,40 @@ function renderCategory(cat, rows) {
   const head = document.createElement("div");
   head.className = "cat-head";
   head.innerHTML = '<span>' + esc(cat) + '</span><span class="muted">' + rows.length + '</span>';
+  if (rows.length > 1) {
+    const killAllBtn = document.createElement("button");
+    killAllBtn.textContent = "Kill all " + rows.length;
+    killAllBtn.className = "danger";
+    killAllBtn.style.cssText = "margin-left:auto;font-size:12px;padding:3px 10px;";
+    killAllBtn.onclick = () => killGroup(rows.map((r) => r.pid), cat);
+    head.appendChild(killAllBtn);
+  }
   wrap.appendChild(head);
 
   const table = document.createElement("table");
-  table.innerHTML =
-    '<thead><tr><th style="width:28px"></th><th>Service</th><th>Port</th><th>PID</th>' +
-    '<th>Path</th><th>Tags</th><th>Category</th><th></th></tr></thead>';
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  const thCb = document.createElement("th");
+  thCb.style.width = "28px";
+  const rowPids = rows.map((r) => r.pid);
+  const catCb = document.createElement("input");
+  catCb.type = "checkbox";
+  const catSelCount = rowPids.filter((pid) => selected.has(pid)).length;
+  catCb.checked = rowPids.length > 0 && catSelCount === rowPids.length;
+  catCb.indeterminate = catSelCount > 0 && catSelCount < rowPids.length;
+  catCb.onchange = () => {
+    if (catCb.checked) rowPids.forEach((pid) => selected.add(pid));
+    else rowPids.forEach((pid) => selected.delete(pid));
+    render();
+  };
+  thCb.appendChild(catCb);
+  headRow.appendChild(thCb);
+  headRow.insertAdjacentHTML(
+    "beforeend",
+    "<th>Service</th><th>Port</th><th>PID</th><th>Path</th><th>Tags</th><th>Category</th><th></th>",
+  );
+  thead.appendChild(headRow);
+  table.appendChild(thead);
   const tbody = document.createElement("tbody");
 
   for (const p of rows) {
@@ -649,17 +721,28 @@ function updateKillBtn() {
   $("killBtn").disabled = selected.size === 0;
 }
 
+function updateSelectAllToggle() {
+  const cb = $("selectAll");
+  const total = orderedPids.length;
+  const selCount = orderedPids.filter((pid) => selected.has(pid)).length;
+  cb.checked = total > 0 && selCount === total;
+  cb.indeterminate = selCount > 0 && selCount < total;
+}
+
 async function killSelected() {
-  const pids = [...selected];
+  await killGroup([...selected]);
+}
+
+async function killGroup(pids, label) {
   if (!pids.length) return;
-  if (!confirm("Kill " + pids.length + " process" + (pids.length === 1 ? "" : "es") + "?")) return;
-  $("killBtn").disabled = true;
+  const scope = label ? " in " + label : "";
+  if (!confirm("Kill " + pids.length + " process" + (pids.length === 1 ? "" : "es") + scope + "?")) return;
   await api("/api/kill", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pids }),
   });
-  selected.clear();
+  selected = new Set([...selected].filter((pid) => !pids.includes(pid)));
   await load();
 }
 
@@ -671,6 +754,25 @@ function esc(s) {
 $("refresh").onclick = load;
 $("killBtn").onclick = killSelected;
 $("showHidden").onchange = (e) => { showHidden = e.target.checked; render(); };
+$("selectAll").onchange = (e) => {
+  selected = e.target.checked ? new Set(orderedPids) : new Set();
+  render();
+};
+
+document.addEventListener("keydown", (e) => {
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "select" || tag === "textarea") return;
+  if (e.key === "Escape") {
+    if (!selected.size) return;
+    selected.clear();
+    anchorPid = null;
+    render();
+  } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+    e.preventDefault();
+    selected = new Set(orderedPids);
+    render();
+  }
+});
 
 load();
 setInterval(load, 5000);
