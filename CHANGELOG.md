@@ -1,4 +1,4 @@
-## [Initial Version] - 2026-02-08
+## [Initial Version] - {PR_MERGE_DATE}
 
 - List all listening TCP ports with process info and service detection
 - Detect Vite, FastAPI, Flask, Next.js, SvelteKit, and Docker containers
@@ -6,3 +6,4 @@
 - Docker actions: restart, stop, view logs, open shell
 - Menu bar widget showing active port count
 - Hide/unhide services from the list
+- Web dashboard for batch-killing processes and editing categorization
