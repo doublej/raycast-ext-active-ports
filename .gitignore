@@ -22,3 +22,6 @@ raycast-env.d.ts
 .claude/
 CLAUDE.md
 .repomap.tags.cache.v1/
+
+# Local diagnostics
+extension-diagnostics.txt
