@@ -26,10 +26,14 @@ const PATH_ENV = [
   process.env.PATH || "",
 ].join(":");
 
-const sh = (cmd) =>
+// Every call blocks the event loop, so it must be bounded: a wedged lsof would
+// otherwise make the dashboard permanently unresponsive.
+const sh = (cmd, timeout = 5000) =>
   execSync(cmd, {
     encoding: "utf-8",
     maxBuffer: 10 * 1024 * 1024,
+    timeout,
+    killSignal: "SIGKILL",
     env: { ...process.env, PATH: PATH_ENV },
   });
 
@@ -155,6 +159,36 @@ function getDockerPorts() {
   return portMap;
 }
 
+// One `lsof` and one `ps` for every pid at once. Per-pid lookups cost ~90ms
+// each, which stalls the whole scan once a few hundred ports are listening.
+function getProcessDetails(pids) {
+  const cwds = new Map();
+  const commands = new Map();
+  if (!pids.length) return { cwds, commands };
+  const list = pids.join(",");
+
+  try {
+    let pid = 0;
+    for (const line of sh(`/usr/sbin/lsof -a -d cwd -p ${list} -Fpn 2>/dev/null`).split("\n")) {
+      if (line[0] === "p") pid = parseInt(line.slice(1), 10);
+      else if (line[0] === "n" && pid) cwds.set(pid, line.slice(1));
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    for (const line of sh(`/bin/ps -p ${list} -ww -o pid=,args= 2>/dev/null`).split("\n")) {
+      const match = line.match(/^\s*(\d+)\s+(.*)$/);
+      if (match) commands.set(parseInt(match[1], 10), match[2].trim());
+    }
+  } catch {
+    // ignore
+  }
+
+  return { cwds, commands };
+}
+
 function getActivePorts() {
   let output = "";
   try {
@@ -191,42 +225,34 @@ function getActivePorts() {
         const port = parseInt(portMatch[1], 10);
         const key = String(port);
         if (portMap.has(key)) break;
-
-        let cwd;
-        let fullCommand = currentCommand;
-        try {
-          cwd =
-            sh(
-              `/usr/sbin/lsof -p ${currentPid} -Fn 2>/dev/null | awk '/^fcwd/{getline; print substr($0,2)}'`,
-            ).trim() || undefined;
-          fullCommand =
-            sh(`/bin/ps -p ${currentPid} -o args= 2>/dev/null`).trim() || currentCommand;
-        } catch {
-          // ignore
-        }
-
-        const flags = detectServiceType(fullCommand, cwd);
-        const dockerInfo = dockerPorts.get(port);
-        const { name, project } = getDisplayName(fullCommand, cwd);
-
-        portMap.set(key, {
-          port,
-          pid: currentPid,
-          command: fullCommand,
-          user: currentUser,
-          displayName: name,
-          projectPath: project || cwd,
-          cwd,
-          ...flags,
-          dockerContainer: dockerInfo?.container,
-          dockerImage: dockerInfo?.image,
-        });
+        portMap.set(key, { port, pid: currentPid, command: currentCommand, user: currentUser });
         break;
       }
     }
   }
 
-  return Array.from(portMap.values()).sort((a, b) => a.port - b.port);
+  const entries = Array.from(portMap.values());
+  const { cwds, commands } = getProcessDetails([...new Set(entries.map((e) => e.pid))]);
+
+  for (const entry of entries) {
+    const cwd = cwds.get(entry.pid) || undefined;
+    const fullCommand = commands.get(entry.pid) || entry.command;
+    const flags = detectServiceType(fullCommand, cwd);
+    const dockerInfo = dockerPorts.get(entry.port);
+    const { name, project } = getDisplayName(fullCommand, cwd);
+
+    Object.assign(entry, {
+      command: fullCommand,
+      displayName: name,
+      projectPath: project || cwd,
+      cwd,
+      ...flags,
+      dockerContainer: dockerInfo?.container,
+      dockerImage: dockerInfo?.image,
+    });
+  }
+
+  return entries.sort((a, b) => a.port - b.port);
 }
 
 // Stable identity used to remember a manual category for a service across
@@ -297,6 +323,24 @@ function readBody(req) {
   });
 }
 
+// The client polls every 5s; a slow scan must not queue up behind itself.
+// Kills invalidate the cache so the UI still reflects them immediately.
+const SCAN_TTL_MS = 3000;
+let scanCache = null;
+let scanCacheAt = 0;
+
+function getCachedPorts() {
+  const now = Date.now();
+  if (scanCache && now - scanCacheAt < SCAN_TTL_MS) return scanCache;
+  scanCache = getActivePorts();
+  scanCacheAt = now;
+  return scanCache;
+}
+
+function invalidateScanCache() {
+  scanCache = null;
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
@@ -306,7 +350,7 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === "/api/ports" && req.method === "GET") {
     const config = loadConfig();
-    const ports = getActivePorts().map((p) => decorate(p, config));
+    const ports = getCachedPorts().map((p) => decorate(p, config));
     return json(res, 200, {
       ports,
       categories: config.categories,
@@ -327,6 +371,7 @@ const server = createServer(async (req, res) => {
         return { pid: n, killed: false };
       }
     });
+    invalidateScanCache();
     return json(res, 200, { results });
   }
 
