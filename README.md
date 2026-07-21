@@ -44,11 +44,44 @@ The server runs detached from Raycast; re-running the command reuses it.
 
 ## Install
 
+Not on the Raycast Store (yet) — install from source. Local extensions work on Raycast's free plan.
+
+### Prerequisites
+
+- macOS with [Raycast](https://raycast.com) installed
+- [Bun](https://bun.sh) or Node.js 20+
+
+### Steps
+
+1. Get the code — either:
+
+   ```bash
+   git clone https://github.com/doublej/raycast-ext-active-ports.git
+   ```
+
+   or download the source zip from the [latest release](https://github.com/doublej/raycast-ext-active-ports/releases/latest) and extract it.
+
+2. Install dependencies and register the extension in Raycast:
+
+   ```bash
+   cd raycast-ext-active-ports
+   bun install       # or: npm install
+   bun run dev       # or: npm run dev
+   ```
+
+   Raycast opens with the extension loaded.
+
+3. Press `Ctrl+C` to stop the dev server — the extension stays installed in Raycast.
+
+### Updating
+
 ```bash
-bun install
-bun run build
-bun run dev
+git pull && bun install && bun run dev   # then Ctrl+C again
 ```
+
+### Uninstalling
+
+Raycast Settings → Extensions → right-click **Active Ports** → Remove Extension.
 
 ## License
 
