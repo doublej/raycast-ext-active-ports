@@ -5,11 +5,11 @@ import { join } from "path";
 
 const SERVER_FILE = "port-server.mjs";
 
-async function isRunning(port: number): Promise<boolean> {
+async function isUp(baseUrl: string): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 600);
-    const res = await fetch(`http://127.0.0.1:${port}/api/health`, {
+    const res = await fetch(`${baseUrl}/api/health`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -19,8 +19,22 @@ async function isRunning(port: number): Promise<boolean> {
   }
 }
 
+const isRunning = (port: number) => isUp(`http://127.0.0.1:${port}`);
+
 export default async function Command() {
-  const { port: portPref } = getPreferenceValues<{ port: string }>();
+  const { port: portPref, atlasUrl } = getPreferenceValues<{
+    port: string;
+    atlasUrl?: string;
+  }>();
+
+  // Atlas carries the same overview, joined with its projects — prefer it when it is up.
+  const atlas = (atlasUrl || "http://127.0.0.1:47891").replace(/\/$/, "");
+  if (await isUp(atlas)) {
+    await open(`${atlas}/ports`);
+    await showHUD("Opened Atlas ports overview");
+    return;
+  }
+
   const port = parseInt(portPref || "47823", 10) || 47823;
   const url = `http://localhost:${port}`;
 
@@ -40,11 +54,15 @@ export default async function Command() {
   copyFileSync(src, dest);
 
   // process.execPath is Raycast's bundled Node binary — always present.
-  const child = spawn(process.execPath, [dest, environment.supportPath, String(port)], {
-    detached: true,
-    stdio: "ignore",
-    env: { ...process.env },
-  });
+  const child = spawn(
+    process.execPath,
+    [dest, environment.supportPath, String(port)],
+    {
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env },
+    },
+  );
   child.unref();
 
   // Give the server a moment to bind before opening the browser.

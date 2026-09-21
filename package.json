@@ -5,7 +5,10 @@
   "description": "View and manage active TCP ports, kill processes, and restart dev servers.",
   "icon": "extension-icon.png",
   "author": "jurre_jan",
-  "categories": ["Developer Tools", "System"],
+  "categories": [
+    "Developer Tools",
+    "System"
+  ],
   "license": "MIT",
   "commands": [
     {
@@ -24,9 +27,17 @@
     {
       "name": "web-dashboard",
       "title": "Open Web Dashboard",
-      "description": "Open a browser dashboard to batch-kill processes and edit categorization",
+      "description": "Open the Atlas ports overview, or the standalone browser dashboard when Atlas is not running",
       "mode": "no-view",
       "preferences": [
+        {
+          "name": "atlasUrl",
+          "title": "Atlas URL",
+          "description": "Atlas console base URL; its /ports page is opened when it answers /api/health",
+          "type": "textfield",
+          "required": false,
+          "default": "http://127.0.0.1:47891"
+        },
         {
           "name": "port",
           "title": "Dashboard Port",
