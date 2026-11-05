@@ -506,6 +506,13 @@ const PAGE = /* html */ `<!doctype html>
     transition: border-color .15s ease;
   }
   input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+  input[type=search] {
+    font: inherit; background: var(--panel2); color: var(--text); width: 260px;
+    border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px;
+    transition: border-color .15s ease;
+  }
+  input[type=search]:focus { outline: none; border-color: var(--accent); }
+  input[type=search]::placeholder { color: var(--muted); }
   .empty { color: var(--muted); padding: 40px; text-align: center; }
   .quick-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 26px; }
   .quick-action {
@@ -521,6 +528,7 @@ const PAGE = /* html */ `<!doctype html>
 <body>
 <header>
   <h1>Active Ports</h1>
+  <input type="search" id="filter" placeholder="Filter — name, port, path, tag  (/)" autocomplete="off" />
   <span class="pill selcount" id="count">0 ports</span>
   <div class="spacer"></div>
   <span class="updated" id="updated"></span>
@@ -539,6 +547,7 @@ const PAGE = /* html */ `<!doctype html>
 let state = { ports: [], categories: [] };
 let selected = new Set();      // keyed by pid
 let showHidden = false;
+let filter = "";               // space-separated terms, all must match
 let orderedPids = [];          // visible pids in render order (for shift-range)
 let anchorPid = null;          // last clicked row (shift-range anchor)
 
@@ -559,9 +568,17 @@ async function load(force) {
   render();
 }
 
+function matches(p) {
+  if (!filter) return true;
+  const hay = [p.displayName, p.port, p.pid, p.projectPath, p.cwd, p.command, p.category, ...p.tags]
+    .join(" ").toLowerCase();
+  return filter.split(/\s+/).every((term) => hay.includes(term));
+}
+
 function render() {
-  const visible = state.ports.filter((p) => showHidden || !p.hidden);
-  $("count").textContent = visible.length + " port" + (visible.length === 1 ? "" : "s");
+  const visible = state.ports.filter((p) => (showHidden || !p.hidden) && matches(p));
+  const label = visible.length + " port" + (visible.length === 1 ? "" : "s");
+  $("count").textContent = filter ? label + " of " + state.ports.length : label;
 
   const groups = new Map();
   for (const c of state.categories) groups.set(c, []);
@@ -749,9 +766,9 @@ async function toggleHidden(p) {
 }
 
 function handleRowClick(pid, e) {
-  if (e.shiftKey && anchorPid != null) {
-    // Range select from the anchor to the clicked row (additive).
-    const a = orderedPids.indexOf(anchorPid);
+  if (e.shiftKey && orderedPids.length) {
+    // Range select from the anchor (first row if none yet) to the clicked row, additive.
+    const a = orderedPids.indexOf(anchorPid != null ? anchorPid : orderedPids[0]);
     const b = orderedPids.indexOf(pid);
     if (a !== -1 && b !== -1) {
       const [lo, hi] = a < b ? [a, b] : [b, a];
@@ -809,6 +826,13 @@ function esc(s) {
 $("refresh").onclick = () => load(true);
 $("killBtn").onclick = killSelected;
 $("showHidden").onchange = (e) => { showHidden = e.target.checked; render(); };
+$("filter").oninput = (e) => {
+  filter = e.target.value.trim().toLowerCase();
+  // Drop selections the filter hides — otherwise "Kill selected" hits rows you can't see.
+  const shown = new Set(state.ports.filter((p) => (showHidden || !p.hidden) && matches(p)).map((p) => p.pid));
+  selected = new Set([...selected].filter((pid) => shown.has(pid)));
+  render();
+};
 $("selectAll").onchange = (e) => {
   selected = e.target.checked ? new Set(orderedPids) : new Set();
   render();
@@ -816,8 +840,17 @@ $("selectAll").onchange = (e) => {
 
 document.addEventListener("keydown", (e) => {
   const tag = (e.target.tagName || "").toLowerCase();
+  if (e.target === $("filter") && e.key === "Escape") {
+    $("filter").value = "";
+    $("filter").dispatchEvent(new Event("input"));
+    $("filter").blur();
+    return;
+  }
   if (tag === "input" || tag === "select" || tag === "textarea") return;
-  if (e.key === "Escape") {
+  if (e.key === "/") {
+    e.preventDefault();
+    $("filter").focus();
+  } else if (e.key === "Escape") {
     if (!selected.size) return;
     selected.clear();
     anchorPid = null;
